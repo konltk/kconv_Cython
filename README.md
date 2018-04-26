@@ -1,2 +1,1 @@
-# kconv_Cython
-python3 setup.py build_ext -i
+# kconv with cython
