@@ -23,82 +23,89 @@ cdef extern from "src/kconv.h":
     void _put_BOM "put_BOM"(FILE *fpout, int out_mode);
 
 
-cdef class Kconv:
-    cdef UCHAR *text, *text2, *ptext
-    cdef FILE *fpin, *fpout
-    cdef bytes file_dir
-    cdef int size, code_type
+def synopsis():
+    _synopsis()
 
-    def __cinit__(self):
-        pass
+cdef UCHAR *_init(str file_dir, int *nbytes):
+    cdef FILE *fpin
+    cdef UCHAR *text
+    cdef int i
 
-    def init(self, _file_dir='input.txt', verbose=False):
-        cdef str encode = 'utf8'
+    if file_dir is None or file_dir == '':
+        raise ValueError('file_dir is None or ""')
 
-        if _file_dir is None or _file_dir == '':
-            raise ValueError('file_dir is None or ""')
+    fpin = fopen(file_dir.encode('cp949'), 'rb')
 
-        self.file_dir = _file_dir.encode(encode)
-        self.fpin = fopen(self.file_dir, 'rb')
+    if fpin is NULL:
+        raise FileNotFoundError('"{}" is not found'.format(file_dir))
 
-        if self.fpin is NULL:
-            raise FileNotFoundError('"{}" is not found'.format(_file_dir))
+    text = _load_text(fpin, nbytes)
 
-        self.text = _load_text(self.fpin, &self.size)
+    if text is NULL:
+        raise MemoryError()
 
-        if verbose:
-            print(self.text.decode(encode))
-            print(self.size)
+    return text
 
-        self.ptext = _skip_BOM_code(self.text, &self.code_type)
+def scan(file_dir="input.txt", verbose=False):
+    cdef int nbytes, i
+    cdef UCHAR *ptext, *text
 
-    def synopsis(self):
-        _synopsis()
+    text = _init(file_dir, &nbytes)
+    ptext = _skip_BOM_code(text, &i)
 
-    def scan(self, file_dir):
-        cdef char code_type
+    i = _detect_kcode(ptext, nbytes)
+    free(ptext)
 
-        self.init(file_dir)
+    if verbose:
+        print('Hangul code of <{}> is <{}>!'.format(file_dir, _hancode(i)))
 
-        code_type = _detect_kcode(self.ptext, self.size)
-        print(_hancode(code_type))
+    return i
 
-        fclose(self.fpin)
-        free(self.text)
+cdef int _enc2enum(str enc):
+    enc = enc.lower().replace('-', '').replace('_', '')
 
-    def kconv(self, infile_dir, outfile_dir, in_code, out_code):
-        cdef int i
+    if enc == 'euckr':
+        return EUCKR
+    elif enc == 'utf8':
+        return UTF8
+    elif enc == 'utf8bom':
+        return UTF8_BOM
+    elif enc == 'utf16le':
+        return UTF16_LE
+    elif enc == 'utf16be':
+        return UTF16_BE
 
-        outfile_dir = outfile_dir.encode('utf8')
+def kconv(infile_dir, outfile_dir, in_enc, out_enc, verbose=False):
+    cdef UCHAR *ptext, *text2
+    cdef FILE *fpout
+    cdef int nbytes, i
+    cdef int in_code, out_code
 
-        self.init(infile_dir)
-        self.fpout = fopen(outfile_dir, 'wb')
+    in_code = _enc2enum(in_enc)
+    out_code = _enc2enum(out_enc)
 
-        in_code = self._summary_encode(in_code)
-        out_code = self._summary_encode(out_code)
+    i = scan(infile_dir)
 
-        self.text2 = <UCHAR *> malloc(self.size * 2)
-        i = _kconv(self.ptext, self.text2, in_code, out_code)
+    if i != in_code:
+        print('Input hangul code error! Change <{}> -> <{}>\n'.format(_hancode(in_code), _hancode(i)))
+        in_code = i
 
-        _put_BOM(self.fpout, out_code)
-        fwrite(self.text2, i, 1, self.fpout)
+    if outfile_dir is None or outfile_dir == '':
+        raise ValueError('outfile dir is None or ""')
 
-        fclose(self.fpin)
-        fclose(self.fpout)
-        free(self.text)
-        free(self.text2)
+    fpout = fopen(outfile_dir.encode('cp949'), 'wb')
 
-    def _summary_encode(self, code):
-        cdef str encode_type
+    ptext = _init(infile_dir, &nbytes)
+    text2 = <UCHAR*> malloc(nbytes * 2)
 
-        encode_type = code.lower().replace('-', '').replace('_', '')
-        if encode_type == 'euckr':
-            return EUCKR
-        elif encode_type == 'utf8':
-            return UTF8
-        elif encode_type == 'utf8bom':
-            return UTF8_BOM
-        elif encode_type == 'utf16le':
-            return UTF16_LE
-        elif encode_type == 'utf16be':
-            return UTF16_BE
+    i = _kconv(ptext, text2, in_code, out_code)
+
+    _put_BOM(fpout, out_code)
+    fwrite(text2, i, 1, fpout)
+
+    fclose(fpout)
+    free(text2)
+    free(ptext)
+
+    if verbose:
+        print('Convert complete!')
