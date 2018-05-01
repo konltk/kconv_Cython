@@ -7,7 +7,5 @@ cython_debug/
 build
 lib/
 
-# source file
-src/*.c
-src/ksc2uni.h
-src/uni2ksc.h
+# user defined
+test/
