@@ -54,7 +54,7 @@ def scan(file_dir="input.txt", verbose=False):
     ptext = _skip_BOM_code(text, &i)
 
     i = _detect_kcode(ptext, nbytes)
-    free(ptext)
+    free(text)
 
     if verbose:
         print('Hangul code of <{}> is <{}>!'.format(file_dir, _hancode(i)))
