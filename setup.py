@@ -1,11 +1,9 @@
 from distutils.core import setup
 from distutils.extension import Extension
-from Cython.Distutils import build_ext
+from Cython.Build import cythonize
 
-ext_modules = Extension("pykconv", 
-	["kconv_wrap.pyx", "src/kconv.c"], 
-	language="c", 
-	extra_compile_args=["-fPIC"])
+extensions = [Extension("kconv", ["kconv_wrapper.pyx", "src/kconv.c"])]
 
-setup(ext_modules=[ext_modules],
-      cmdclass = {'build_ext': build_ext})
+setup(
+    ext_modules = cythonize(extensions)
+)

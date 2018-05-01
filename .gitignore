@@ -1,0 +1,11 @@
+# create by pycharm
+.idea
+
+# create by cython
+*.so
+cython_debug/
+build
+lib/
+
+# user defined
+test/
