@@ -5,7 +5,6 @@
 *.so
 cython_debug/
 build
-lib/
 
 # user defined
 test/
