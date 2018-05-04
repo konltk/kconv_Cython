@@ -1,5 +1,9 @@
 from libc.stdio cimport FILE, fopen, fclose, fwrite
 from libc.stdlib cimport free, malloc
+from libc.stdio cimport printf
+from libc.string cimport memset
+
+import sys
 
 
 ctypedef unsigned char UCHAR
@@ -34,7 +38,7 @@ cdef UCHAR *_init(str file_dir, int *nbytes):
     if file_dir is None or file_dir == '':
         raise ValueError('file_dir is None or ""')
 
-    fpin = fopen(file_dir.encode('cp949'), 'rb')
+    fpin = fopen(file_dir.encode(sys.getdefaultencoding()), 'rb')
 
     if fpin is NULL:
         raise FileNotFoundError('"{}" is not found'.format(file_dir))
@@ -46,7 +50,7 @@ cdef UCHAR *_init(str file_dir, int *nbytes):
 
     return text
 
-def scan(file_dir="input.txt", verbose=False):
+def scan(file_dir):
     cdef int nbytes, i
     cdef UCHAR *ptext, *text
 
@@ -56,15 +60,12 @@ def scan(file_dir="input.txt", verbose=False):
     i = _detect_kcode(ptext, nbytes)
     free(text)
 
-    if verbose:
-        print('Hangul code of <{}> is <{}>!'.format(file_dir, _hancode(i)))
-
-    return i
+    return _hancode(i)
 
 cdef int _enc2enum(str enc):
     enc = enc.lower().replace('-', '').replace('_', '')
 
-    if enc == 'euckr':
+    if enc == 'euckr' or enc == 'cp949':
         return EUCKR
     elif enc == 'utf8':
         return UTF8
@@ -75,7 +76,42 @@ cdef int _enc2enum(str enc):
     elif enc == 'utf16be':
         return UTF16_BE
 
-def kconv(infile_dir, outfile_dir, in_enc, out_enc, verbose=False):
+def convert(string, in_enc, out_enc):
+    cdef int in_code, out_code
+    cdef size_t i, src_len, dst_len
+    cdef UCHAR *src_string, *dst_string
+    cdef bytes result
+
+    if isinstance(string, str):
+        in_enc = 'CP949'
+        string = string.encode(in_enc)
+
+    in_code = _enc2enum(in_enc)
+    out_code = _enc2enum(out_enc)
+
+    src_len = len(string)
+    src_string = <UCHAR*>malloc(sizeof(UCHAR) * src_len)
+    dst_string = <UCHAR*>malloc(sizeof(UCHAR) * src_len * 2)
+    memset(src_string, 0, sizeof(UCHAR) * src_len)
+    memset(dst_string, 0, sizeof(UCHAR) * src_len * 2)
+
+    for i in range(src_len):
+        src_string[i] = string[i]
+        # printf("%x%s", src_string[i], "\n" if i == src_len - 1 else " ")
+
+    dst_len = _kconv(src_string, dst_string, in_code, out_code)
+    result = b''
+
+    for i in range(dst_len):
+        result += bytes([dst_string[i]])
+        # printf("%x%s", dst_string[i], "\n" if i == dst_len - 1 else " ")
+
+    free(src_string)
+    free(dst_string)
+
+    return result
+
+def convert_file(infile_dir, outfile_dir, in_enc, out_enc):
     cdef UCHAR *ptext, *text2
     cdef FILE *fpout
     cdef int nbytes, i
@@ -83,12 +119,6 @@ def kconv(infile_dir, outfile_dir, in_enc, out_enc, verbose=False):
 
     in_code = _enc2enum(in_enc)
     out_code = _enc2enum(out_enc)
-
-    i = scan(infile_dir)
-
-    if i != in_code:
-        print('Input hangul code error! Change <{}> -> <{}>\n'.format(_hancode(in_code), _hancode(i)))
-        in_code = i
 
     if outfile_dir is None or outfile_dir == '':
         raise ValueError('outfile dir is None or ""')
@@ -106,6 +136,3 @@ def kconv(infile_dir, outfile_dir, in_enc, out_enc, verbose=False):
     fclose(fpout)
     free(text2)
     free(ptext)
-
-    if verbose:
-        print('Convert complete!')
